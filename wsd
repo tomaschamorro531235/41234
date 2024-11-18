@@ -1,0 +1,142 @@
+-- Advanced Hitbox Expander Script para Roblox
+-- Coloca este script en un LocalScript dentro de StarterPlayerScripts
+
+local player = game.Players.LocalPlayer
+local virtualUser = game:GetService("VirtualUser")
+local playersService = game:GetService("Players")
+local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+
+-- Configuración del script
+local config = {
+hitboxSize = Vector3.new(5, 5, 5), -- Tamaño del hitbox expandido
+hitboxTransparency = 0.5, -- Transparencia del hitbox expandido (0 = invisible, 1 = completamente visible)
+hitboxCheckInterval = 1 -- Intervalo en segundos para revisar y expandir hitboxes
+}
+
+-- Lista de amigos para excluir
+local excludedFriends = {}
+
+-- Función para obtener la lista de amigos del jugador
+local function getFriends(player)
+local success, result = pcall(function()
+return player:GetFriendsAsync()
+end)
+return success and result:GetCurrentPage() or {}
+end
+
+-- Obtener la lista de amigos excluidos
+local friendsList = getFriends(player)
+for _, friend in pairs(friendsList) do
+excludedFriends[friend.Id] = true
+end
+
+-- Función para expandir solo el torso del personaje
+local function expandTorso(character)
+local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+if torso then
+torso.Size = config.hitboxSize
+torso.Transparency = config.hitboxTransparency
+torso.Massless = true
+torso.CanCollide = false
+
+local selectionBox = Instance.new("SelectionBox")
+selectionBox.Adornee = torso
+selectionBox.Parent = torso
+selectionBox.LineThickness = 0.05
+selectionBox.Color3 = Color3.new(1, 0, 0) -- Color del hitbox (rojo)
+selectionBox.Transparency = config.hitboxTransparency
+
+return true -- Indica que el torso fue expandido
+end
+
+return false -- Indica que no se expandió el torso
+end
+
+-- Función para manejar nuevos jugadores
+local function onPlayerAdded(player)
+-- Excluir al jugador local, a ti mismo (fov03) y a los amigos de la expansión del hitbox
+if player.Name ~= "fov03" and player ~= game.Players.LocalPlayer and not excludedFriends[player.UserId] then
+player.CharacterAdded:Connect(function(character)
+if expandTorso(character) then
+print("Hitbox expandido para: " .. player.Name)
+end
+end)
+
+if player.Character then
+if expandTorso(player.Character) then
+print("Hitbox expandido para: " .. player.Name)
+end
+end
+end
+end
+
+-- Función para revisar y expandir hitboxes periódicamente
+local function periodicHitboxCheck()
+while true do
+for _, player in ipairs(playersService:GetPlayers()) do
+if player.Name ~= "fov03" and player ~= game.Players.LocalPlayer and not excludedFriends[player.UserId] then
+if player.Character then
+local torso = player.Character:FindFirstChild("UpperTorso") or player.Character:FindFirstChild("Torso")
+if torso and torso.Size ~= config.hitboxSize then
+if expandTorso(player.Character) then
+print("Hitbox expandido para: " .. player.Name)
+end
+end
+end
+end
+end
+wait(config.hitboxCheckInterval)
+end
+end
+
+-- Función para apuntar al torso y disparar a la cabeza
+local function aimAndShootAtHead(torso)
+local character = player.Character
+if not character then return end
+
+local head = torso.Parent:FindFirstChild("Head")
+if not head then return end
+
+local camera = workspace.CurrentCamera
+local aimDirection = (head.Position - camera.CFrame.Position).unit
+
+virtualUser:CaptureController()
+virtualUser:Button1Down(Vector2.new(aimDirection.X, aimDirection.Y), camera.CFrame)
+wait(0.1)
+virtualUser:Button1Up(Vector2.new(aimDirection.X, aimDirection.Y), camera.CFrame)
+end
+
+-- Asegurar que los disparos se dirijan a la cabeza del enemigo más cercano cuando se hace clic en el torso
+userInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+if input.UserInputType == Enum.UserInputType.MouseButton1 and not gameProcessedEvent then
+local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
+local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+raycastParams.FilterDescendantsInstances = {player.Character}
+
+local raycastResult = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+if raycastResult and raycastResult.Instance then
+local hit = raycastResult.Instance
+local targetPlayer = playersService:GetPlayerFromCharacter(hit.Parent)
+
+if targetPlayer and targetPlayer.Character and (hit.Name == "UpperTorso" or hit.Name == "Torso") then
+aimAndShootAtHead(hit)
+end
+end
+end
+end)
+
+-- Conectar eventos para jugadores existentes y nuevos
+for _, player in pairs(playersService:GetPlayers()) do
+onPlayerAdded(player)
+end
+playersService.PlayerAdded:Connect(onPlayerAdded)
+
+-- Iniciar verificación periódica de hitboxes
+spawn(periodicHitboxCheck)
+
+-- Mensaje de inicio
+print("Advanced Hitbox Expander iniciado automáticamente")
