@@ -3,7 +3,7 @@ local players = game:GetService("Players")
 local runService = game:GetService("RunService")
 
 -- hitbox settings
-local hitboxSizeMultiplier = Vector3.new(10, 10, 15) -- ajuste del tamaño de la hitbox
+local hitboxSizeMultiplier = Vector3.new(8, 8, 12) -- ajuste del tamaño de la hitbox
 local excludedPlayerName = "mosquitoinsano4" -- nombre del jugador excluido
 
 -- function to create an expanded hitbox
